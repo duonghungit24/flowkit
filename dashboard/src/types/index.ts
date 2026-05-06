@@ -138,11 +138,9 @@ export interface ChatMessageRecord {
 export interface ToolCallDisplay {
   id: string
   name: string
-  method: string
-  path: string
-  body?: unknown
+  input: Record<string, unknown>
   result?: string
-  error?: string
+  isError?: boolean
 }
 
 export interface LibrarySkill {
@@ -171,23 +169,15 @@ export type NdjsonEvent =
   | { type: 'session'; session_id: string }
   | { type: 'text'; delta: string }
   | {
-      type: 'tool_call'
+      type: 'tool_use'
       id: string
       name: string
-      args: { method: string; path: string; body?: unknown }
+      input: Record<string, unknown>
     }
-  | { type: 'tool_result'; id: string; content: string }
-  | {
-      type: 'confirm_required'
-      id: string
-      method: string
-      path: string
-      body?: unknown
-    }
+  | { type: 'tool_result'; id: string; content: string; is_error?: boolean }
   | { type: 'error'; content: string }
   | {
       type: 'done'
       session_id: string
       final_text?: string
-      stopped?: string
     }

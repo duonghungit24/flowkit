@@ -185,7 +185,7 @@ function VideosTab({ videos }: { videos: Video[] }) {
 }
 
 // ---- Scenes Tab ----
-function ScenesTab({ videos }: { videos: Video[] }) {
+function ScenesTab({ videos, refreshNonce }: { videos: Video[]; refreshNonce: number }) {
   const [selectedVideoId, setSelectedVideoId] = useState(videos[0]?.id ?? '')
   const [scenes, setScenes] = useState<Scene[]>([])
   const [loading, setLoading] = useState(false)
@@ -197,7 +197,7 @@ function ScenesTab({ videos }: { videos: Video[] }) {
       .then(setScenes)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [selectedVideoId])
+  }, [selectedVideoId, refreshNonce])
 
   async function patchScene(sid: string, field: string, value: string) {
     await patchAPI(`/api/scenes/${sid}`, { [field]: value })
@@ -312,6 +312,7 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     safeSkill ? `/${safeSkill} ` : null,
   )
   const [loading, setLoading] = useState(true)
+  const [refreshNonce, setRefreshNonce] = useState(0)
 
   function fetchAll() {
     setLoading(true)
@@ -327,6 +328,7 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
       })
       .catch(console.error)
       .finally(() => setLoading(false))
+    setRefreshNonce(n => n + 1)
   }
 
   useEffect(() => {
@@ -390,14 +392,16 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
         {tab === 'Overview' && <OverviewTab project={project} onRefresh={fetchAll} />}
         {tab === 'Characters' && <CharactersTab characters={characters} onRefresh={fetchAll} />}
         {tab === 'Videos' && <VideosTab videos={videos} />}
-        {tab === 'Scenes' && <ScenesTab videos={videos} />}
-        {tab === 'Chat' && (
+        {tab === 'Scenes' && <ScenesTab videos={videos} refreshNonce={refreshNonce} />}
+        {/* Chat panel stays mounted so in-flight streams + transcript survive tab switches. */}
+        <div style={{ display: tab === 'Chat' ? 'block' : 'none' }}>
           <ProjectChatPanel
             projectId={projectId}
             initialInput={chatInitialInput}
             onInitialInputConsumed={() => setChatInitialInput(null)}
+            onChatTurnComplete={fetchAll}
           />
-        )}
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,8 @@
-// Top-level chat panel: session list + transcript + input.
+// Top-level chat panel: session list + transcript + input. Streams native
+// Claude Code tool_use/tool_result events from the agent's /api/chat NDJSON
+// endpoint and renders them inline.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  confirmToolCall,
   deleteSession,
   getSession,
   listSessions,
@@ -16,25 +17,18 @@ import type {
 import ChatInput from './ChatInput'
 import ChatMessage from './ChatMessage'
 import ChatSessionList from './ChatSessionList'
-import ConfirmModal from '../shared/ConfirmModal'
 
 interface Props {
   projectId: string
   initialInput?: string | null
   onInitialInputConsumed?: () => void
+  onChatTurnComplete?: () => void
 }
 
 interface DisplayMessage {
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
   toolCalls: ToolCallDisplay[]
-}
-
-interface ConfirmEvent {
-  id: string
-  method: string
-  path: string
-  body?: unknown
 }
 
 const LS_KEY = (projectId: string) => `fk-chat-session:${projectId}`
@@ -53,12 +47,12 @@ export default function ProjectChatPanel({
   projectId,
   initialInput,
   onInitialInputConsumed,
+  onChatTurnComplete,
 }: Props) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [streaming, setStreaming] = useState(false)
-  const [confirmEvent, setConfirmEvent] = useState<ConfirmEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -93,7 +87,6 @@ export default function ProjectChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -128,23 +121,6 @@ export default function ProjectChatPanel({
     }
   }
 
-  async function decideConfirm(approved: boolean) {
-    if (!confirmEvent) return
-    const pending = confirmEvent
-    setConfirmEvent(null)
-    try {
-      await confirmToolCall({
-        toolCallId: pending.id,
-        approved,
-        sessionId: activeId,
-      })
-    } catch (e) {
-      // Most likely the Future already timed out (120s). Surface to user;
-      // the open stream will yield the rejection result on its own.
-      setError(`Confirmation failed: ${String(e)}`)
-    }
-  }
-
   async function handleSend(text: string) {
     if (streaming) return
     setError(null)
@@ -155,6 +131,13 @@ export default function ProjectChatPanel({
 
     const apiMessages = history.map(m => ({ role: m.role, content: m.content }))
     let assistantIdx = -1
+
+    function ensureAssistantBubble(prev: DisplayMessage[]): DisplayMessage[] {
+      if (assistantIdx !== -1 && prev[assistantIdx]?.role === 'assistant') return prev
+      const out = [...prev, { role: 'assistant' as const, content: '', toolCalls: [] }]
+      assistantIdx = out.length - 1
+      return out
+    }
 
     try {
       const stream = streamChat({
@@ -174,6 +157,7 @@ export default function ProjectChatPanel({
     } finally {
       setStreaming(false)
       refreshSessions().catch(() => {})
+      onChatTurnComplete?.()
     }
 
     function applyEvent(ev: NdjsonEvent) {
@@ -187,39 +171,23 @@ export default function ProjectChatPanel({
         }
         case 'text': {
           setMessages(prev => {
-            const out = [...prev]
-            if (assistantIdx === -1 || out[assistantIdx]?.role !== 'assistant') {
-              out.push({ role: 'assistant', content: ev.delta, toolCalls: [] })
-              assistantIdx = out.length - 1
-            } else {
-              out[assistantIdx] = {
-                ...out[assistantIdx],
-                content: out[assistantIdx].content + ev.delta,
-              }
-            }
+            const out = ensureAssistantBubble(prev)
+            const cur = out[assistantIdx]
+            out[assistantIdx] = { ...cur, content: cur.content + ev.delta }
             return out
           })
           break
         }
-        case 'tool_call': {
+        case 'tool_use': {
           const tc: ToolCallDisplay = {
             id: ev.id,
             name: ev.name,
-            method: ev.args?.method ?? 'GET',
-            path: ev.args?.path ?? '/',
-            body: ev.args?.body,
+            input: ev.input,
           }
           setMessages(prev => {
-            const out = [...prev]
-            if (assistantIdx === -1 || out[assistantIdx]?.role !== 'assistant') {
-              out.push({ role: 'assistant', content: '', toolCalls: [tc] })
-              assistantIdx = out.length - 1
-            } else {
-              out[assistantIdx] = {
-                ...out[assistantIdx],
-                toolCalls: [...out[assistantIdx].toolCalls, tc],
-              }
-            }
+            const out = ensureAssistantBubble(prev)
+            const cur = out[assistantIdx]
+            out[assistantIdx] = { ...cur, toolCalls: [...cur.toolCalls, tc] }
             return out
           })
           break
@@ -232,24 +200,19 @@ export default function ProjectChatPanel({
               const idx = tcs.findIndex(t => t.id === ev.id)
               if (idx !== -1) {
                 const next = [...tcs]
-                next[idx] = { ...next[idx], result: ev.content }
+                next[idx] = {
+                  ...next[idx],
+                  result: ev.content,
+                  isError: ev.is_error,
+                }
                 out[i] = { ...out[i], toolCalls: next }
                 break
               }
             }
             return out
           })
-          // Reset assistantIdx so next text delta starts a fresh bubble
+          // Reset bubble pointer so the next text delta starts a fresh bubble.
           assistantIdx = -1
-          break
-        }
-        case 'confirm_required': {
-          setConfirmEvent({
-            id: ev.id,
-            method: ev.method,
-            path: ev.path,
-            body: ev.body,
-          })
           break
         }
         case 'error': {
@@ -272,7 +235,7 @@ export default function ProjectChatPanel({
   }
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: '220px 1fr' }}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: '220px minmax(0, 1fr)' }}>
       <ChatSessionList
         sessions={sessions}
         activeId={activeId}
@@ -324,24 +287,12 @@ export default function ProjectChatPanel({
         <div className="p-3" style={{ borderTop: '1px solid var(--border)' }}>
           <ChatInput
             onSend={handleSend}
-            disabled={streaming || !!confirmEvent}
+            disabled={streaming}
             initialValue={initialInput}
             onInitialValueConsumed={onInitialInputConsumed}
           />
         </div>
       </div>
-      <ConfirmModal
-        open={!!confirmEvent}
-        method={confirmEvent?.method ?? ''}
-        path={confirmEvent?.path ?? ''}
-        bodySummary={
-          confirmEvent?.body !== undefined
-            ? JSON.stringify(confirmEvent.body, null, 2)
-            : undefined
-        }
-        onApprove={() => decideConfirm(true)}
-        onReject={() => decideConfirm(false)}
-      />
     </div>
   )
 }

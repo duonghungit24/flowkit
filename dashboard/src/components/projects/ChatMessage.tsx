@@ -1,4 +1,4 @@
-// Single chat message bubble + inline tool-call display.
+// Single chat message bubble + inline tool-use display.
 import { useState, type ReactNode } from 'react'
 import type { ToolCallDisplay } from '../../types'
 
@@ -6,14 +6,6 @@ interface Props {
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
   toolCalls?: ToolCallDisplay[]
-}
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'var(--green)',
-  POST: 'var(--accent)',
-  PATCH: 'var(--yellow)',
-  PUT: 'var(--yellow)',
-  DELETE: 'var(--red)',
 }
 
 // Lightweight inline markdown — bold + inline code only.
@@ -46,7 +38,6 @@ function renderInline(text: string): ReactNode[] {
 }
 
 function renderContent(content: string) {
-  // Split on newlines, keep blank lines as spacing
   return content.split('\n').map((line, i) => (
     <div key={i} style={{ minHeight: '1em' }}>
       {renderInline(line)}
@@ -54,11 +45,24 @@ function renderContent(content: string) {
   ))
 }
 
+// One-line summary of a tool_use input — Bash gets command, Read/Edit get file_path,
+// everything else falls back to compact JSON.
+function summariseInput(name: string, input: Record<string, unknown>): string {
+  if (!input || typeof input !== 'object') return ''
+  if (name === 'Bash') return String(input.command ?? '')
+  if (name === 'Read' || name === 'Write' || name === 'Edit' || name === 'NotebookEdit') {
+    return String(input.file_path ?? input.path ?? '')
+  }
+  if (name === 'Glob') return String(input.pattern ?? '')
+  if (name === 'Grep') return String(input.pattern ?? '')
+  return JSON.stringify(input)
+}
+
 function ToolCallCard({ tc }: { tc: ToolCallDisplay }) {
   const [open, setOpen] = useState(false)
-  const color = METHOD_COLORS[tc.method] ?? 'var(--muted)'
-  const bodyStr =
-    tc.body !== undefined ? JSON.stringify(tc.body, null, 2) : ''
+  const summary = summariseInput(tc.name, tc.input)
+  const accent = tc.isError ? 'var(--red)' : 'var(--accent)'
+  const inputStr = JSON.stringify(tc.input ?? {}, null, 2)
   return (
     <div
       className="rounded mt-2 text-xs"
@@ -66,20 +70,22 @@ function ToolCallCard({ tc }: { tc: ToolCallDisplay }) {
     >
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-left min-w-0"
         style={{ color: 'var(--muted)' }}
       >
-        <span style={{ color }}>{open ? '▼' : '▶'}</span>
-        <span className="font-bold" style={{ color }}>
-          {tc.method}
+        <span style={{ color: accent }}>{open ? '▼' : '▶'}</span>
+        <span className="font-bold flex-shrink-0" style={{ color: accent }}>
+          {tc.name}
         </span>
-        <span className="font-mono truncate" style={{ color: 'var(--text)' }}>
-          {tc.path}
+        <span
+          className="font-mono truncate flex-1 min-w-0"
+          style={{ color: 'var(--text)' }}
+          title={summary}
+        >
+          {summary}
         </span>
-        {tc.error && (
-          <span className="ml-auto" style={{ color: 'var(--red)' }}>
-            error
-          </span>
+        {tc.isError && (
+          <span style={{ color: 'var(--red)' }}>error</span>
         )}
       </button>
       {open && (
@@ -87,41 +93,28 @@ function ToolCallCard({ tc }: { tc: ToolCallDisplay }) {
           className="px-2 py-2 flex flex-col gap-2"
           style={{ borderTop: '1px solid var(--border)' }}
         >
-          {bodyStr && (
-            <div>
-              <div
-                className="text-xs font-bold mb-1"
-                style={{ color: 'var(--muted)' }}
-              >
-                REQUEST
-              </div>
-              <pre
-                className="text-xs p-2 rounded overflow-auto max-h-60"
-                style={{ background: 'var(--bg)', color: 'var(--text)' }}
-              >
-                {bodyStr}
-              </pre>
+          <div>
+            <div className="text-xs font-bold mb-1" style={{ color: 'var(--muted)' }}>
+              INPUT
             </div>
-          )}
+            <pre
+              className="text-xs p-2 rounded overflow-auto max-h-60 whitespace-pre-wrap break-all"
+              style={{ background: 'var(--bg)', color: 'var(--text)' }}
+            >
+              {inputStr}
+            </pre>
+          </div>
           {tc.result && (
             <div>
-              <div
-                className="text-xs font-bold mb-1"
-                style={{ color: 'var(--muted)' }}
-              >
-                RESULT
+              <div className="text-xs font-bold mb-1" style={{ color: 'var(--muted)' }}>
+                {tc.isError ? 'ERROR' : 'RESULT'}
               </div>
               <pre
-                className="text-xs p-2 rounded overflow-auto max-h-60"
-                style={{ background: 'var(--bg)', color: 'var(--text)' }}
+                className="text-xs p-2 rounded overflow-auto max-h-60 whitespace-pre-wrap break-all"
+                style={{ background: 'var(--bg)', color: tc.isError ? 'var(--red)' : 'var(--text)' }}
               >
                 {tc.result}
               </pre>
-            </div>
-          )}
-          {tc.error && (
-            <div className="text-xs" style={{ color: 'var(--red)' }}>
-              {tc.error}
             </div>
           )}
         </div>
@@ -133,9 +126,9 @@ function ToolCallCard({ tc }: { tc: ToolCallDisplay }) {
 export default function ChatMessage({ role, content, toolCalls }: Props) {
   const isUser = role === 'user'
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex min-w-0 ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className="rounded-lg px-3 py-2 max-w-[85%]"
+        className="rounded-lg px-3 py-2 max-w-[85%] min-w-0 overflow-hidden"
         style={{
           background: isUser ? 'rgba(59,130,246,0.12)' : 'var(--card)',
           border: `1px solid ${isUser ? 'var(--accent)' : 'var(--border)'}`,
@@ -143,7 +136,7 @@ export default function ChatMessage({ role, content, toolCalls }: Props) {
         }}
       >
         {content && (
-          <div className="text-xs leading-relaxed">{renderContent(content)}</div>
+          <div className="text-xs leading-relaxed break-words">{renderContent(content)}</div>
         )}
         {toolCalls?.map(tc => <ToolCallCard key={tc.id} tc={tc} />)}
       </div>

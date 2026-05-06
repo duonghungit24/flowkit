@@ -13,7 +13,6 @@ interface StreamChatArgs {
   projectId: string | null
   sessionId: string | null
   model?: string
-  autoApproveMutations?: boolean
   signal?: AbortSignal
 }
 
@@ -29,7 +28,6 @@ export async function* streamChat(
       project_id: args.projectId,
       session_id: args.sessionId,
       model: args.model,
-      auto_approve_mutations: args.autoApproveMutations ?? false,
     }),
   })
   if (!res.ok || !res.body) {
@@ -78,21 +76,6 @@ export function getSession(
 
 export function deleteSession(sid: string): Promise<{ deleted: string }> {
   return fetchAPI(`/api/chat/sessions/${sid}`, { method: 'DELETE' })
-}
-
-export function confirmToolCall(args: {
-  toolCallId: string
-  approved: boolean
-  sessionId?: string | null
-}): Promise<{ ok: boolean; tool_call_id: string; approved: boolean }> {
-  return fetchAPI('/api/chat/confirm', {
-    method: 'POST',
-    body: JSON.stringify({
-      tool_call_id: args.toolCallId,
-      approved: args.approved,
-      session_id: args.sessionId ?? null,
-    }),
-  })
 }
 
 export interface ToolAuditEntry {
