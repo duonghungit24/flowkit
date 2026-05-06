@@ -153,11 +153,44 @@ CREATE TABLE IF NOT EXISTS request (
     updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS chat_session (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT REFERENCES project(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL DEFAULT 'New Chat',
+    model       TEXT NOT NULL DEFAULT 'claude-sonnet-4-5',
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS chat_message (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL REFERENCES chat_session(id) ON DELETE CASCADE,
+    project_id  TEXT REFERENCES project(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL CHECK(role IN ('user','assistant','tool')),
+    content     TEXT NOT NULL,
+    tool_calls  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS tool_call_audit (
+    id           TEXT PRIMARY KEY,
+    session_id   TEXT REFERENCES chat_session(id) ON DELETE CASCADE,
+    message_id   TEXT,
+    method       TEXT NOT NULL,
+    path         TEXT NOT NULL,
+    body_summary TEXT,
+    status       TEXT NOT NULL CHECK(status IN ('approved','rejected','auto')),
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_scene_video ON scene(video_id);
 CREATE INDEX IF NOT EXISTS idx_scene_order ON scene(video_id, display_order);
 CREATE INDEX IF NOT EXISTS idx_request_status ON request(status);
 CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
 CREATE INDEX IF NOT EXISTS idx_video_project ON video(project_id);
+CREATE INDEX IF NOT EXISTS idx_chat_session_project ON chat_session(project_id);
+CREATE INDEX IF NOT EXISTS idx_chat_message_session ON chat_message(session_id);
+CREATE INDEX IF NOT EXISTS idx_tool_call_audit_session ON tool_call_audit(session_id);
 """
 
 

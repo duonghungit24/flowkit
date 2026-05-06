@@ -8,7 +8,10 @@ from agent.db.schema import get_db, _db_lock
 
 logger = logging.getLogger(__name__)
 
-_VALID_TABLES = frozenset({"character", "project", "video", "scene", "request", "material"})
+_VALID_TABLES = frozenset({
+    "character", "project", "video", "scene", "request", "material",
+    "chat_session", "chat_message", "tool_call_audit",
+})
 
 
 def _validate_table(table: str) -> None:
@@ -31,6 +34,9 @@ _COLUMNS = {
               "vertical_end_scene_media_id", "horizontal_end_scene_media_id",
               "trim_start", "trim_end", "duration", "display_order", "source", "transition_prompt", "narrator_text", "updated_at"},
     "request": {"status", "request_id", "media_id", "output_url", "error_message", "retry_count", "next_retry_at", "source_media_id", "updated_at"},
+    "chat_session": {"title", "model", "project_id", "updated_at"},
+    "chat_message": {"content", "tool_calls"},
+    "tool_call_audit": {"status"},
 }
 
 
@@ -337,4 +343,77 @@ async def delete_material(mid: str): return await _delete("material", "id", mid)
 async def list_materials() -> list[dict]:
     db = await get_db()
     cur = await db.execute("SELECT * FROM material ORDER BY created_at")
+    return [dict(r) for r in await cur.fetchall()]
+
+
+# ─── Chat ───────────────────────────────────────────────────
+
+async def create_chat_session(project_id: str = None, title: str = "New Chat",
+                              model: str = "claude-sonnet-4-5", id: str = None) -> dict:
+    db = await get_db()
+    sid, now = id or _uuid(), _now()
+    async with _db_lock:
+        await db.execute(
+            "INSERT INTO chat_session (id,project_id,title,model,created_at,updated_at) VALUES (?,?,?,?,?,?)",
+            (sid, project_id, title, model, now, now))
+        await db.commit()
+    return await _get_with_db(db, "chat_session", "id", sid)
+
+
+async def get_chat_session(sid: str): return await _get("chat_session", "id", sid)
+async def update_chat_session(sid: str, **kw): return await _update("chat_session", "id", sid, **kw)
+async def delete_chat_session(sid: str): return await _delete("chat_session", "id", sid)
+
+
+async def list_chat_sessions(project_id: str = None) -> list[dict]:
+    db = await get_db()
+    if project_id:
+        cur = await db.execute(
+            "SELECT * FROM chat_session WHERE project_id=? ORDER BY updated_at DESC", (project_id,))
+    else:
+        cur = await db.execute("SELECT * FROM chat_session ORDER BY updated_at DESC")
+    return [dict(r) for r in await cur.fetchall()]
+
+
+async def create_chat_message(session_id: str, role: str, content: str,
+                              project_id: str = None, tool_calls: list = None) -> dict:
+    db = await get_db()
+    mid, now = _uuid(), _now()
+    tc_json = json.dumps(tool_calls) if tool_calls else None
+    async with _db_lock:
+        await db.execute(
+            "INSERT INTO chat_message (id,session_id,project_id,role,content,tool_calls,created_at) VALUES (?,?,?,?,?,?,?)",
+            (mid, session_id, project_id, role, content, tc_json, now))
+        # Bump session updated_at so list_chat_sessions ordering stays fresh
+        await db.execute("UPDATE chat_session SET updated_at=? WHERE id=?", (now, session_id))
+        await db.commit()
+    return await _get_with_db(db, "chat_message", "id", mid)
+
+
+async def list_chat_messages(session_id: str) -> list[dict]:
+    db = await get_db()
+    cur = await db.execute(
+        "SELECT * FROM chat_message WHERE session_id=? ORDER BY created_at ASC", (session_id,))
+    return [dict(r) for r in await cur.fetchall()]
+
+
+async def create_tool_audit(session_id: str, method: str, path: str,
+                            status: str = "auto", message_id: str = None,
+                            body_summary: str = None) -> dict:
+    db = await get_db()
+    aid, now = _uuid(), _now()
+    async with _db_lock:
+        await db.execute(
+            "INSERT INTO tool_call_audit (id,session_id,message_id,method,path,body_summary,status,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (aid, session_id, message_id, method, path, body_summary, status, now))
+        await db.commit()
+    return await _get_with_db(db, "tool_call_audit", "id", aid)
+
+
+async def list_tool_audit(session_id: str) -> list[dict]:
+    db = await get_db()
+    cur = await db.execute(
+        "SELECT * FROM tool_call_audit WHERE session_id=? ORDER BY created_at ASC",
+        (session_id,),
+    )
     return [dict(r) for r in await cur.fetchall()]
