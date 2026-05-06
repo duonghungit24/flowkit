@@ -113,3 +113,81 @@ export interface WSEvent {
   data: Record<string, unknown>
   timestamp: string
 }
+
+// ---- Chat ----
+
+export interface ChatSession {
+  id: string
+  project_id: string | null
+  title: string
+  model: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessageRecord {
+  id: string
+  session_id: string
+  project_id: string | null
+  role: 'user' | 'assistant' | 'tool' | 'system'
+  content: string
+  tool_calls: string | null
+  created_at: string
+}
+
+export interface ToolCallDisplay {
+  id: string
+  name: string
+  method: string
+  path: string
+  body?: unknown
+  result?: string
+  error?: string
+}
+
+export interface LibrarySkill {
+  name: string
+  usage: string
+  description: string
+  group: string
+  stage: string
+  tags: string[]
+}
+
+// Visual style material (mirrors agent/models/material.py:MaterialResponse).
+// Note: despite the name, this is a style descriptor — not an uploaded file.
+export interface Material {
+  id: string
+  name: string
+  style_instruction: string
+  negative_prompt: string | null
+  scene_prefix: string | null
+  lighting: string
+  is_builtin: boolean
+}
+
+// NDJSON event types — match agent/services/llm_bridge.py
+export type NdjsonEvent =
+  | { type: 'session'; session_id: string }
+  | { type: 'text'; delta: string }
+  | {
+      type: 'tool_call'
+      id: string
+      name: string
+      args: { method: string; path: string; body?: unknown }
+    }
+  | { type: 'tool_result'; id: string; content: string }
+  | {
+      type: 'confirm_required'
+      id: string
+      method: string
+      path: string
+      body?: unknown
+    }
+  | { type: 'error'; content: string }
+  | {
+      type: 'done'
+      session_id: string
+      final_text?: string
+      stopped?: string
+    }

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { fetchAPI, patchAPI } from '../api/client'
+import { setLastProjectId } from '../lib/last-project'
 import type { Project, Character, Video, Scene, ChainType, StatusType } from '../types'
 import EditableText from '../components/projects/EditableText'
+import ProjectChatPanel from '../components/projects/ProjectChatPanel'
 
-type Tab = 'Overview' | 'Characters' | 'Videos' | 'Scenes'
+type Tab = 'Overview' | 'Characters' | 'Videos' | 'Scenes' | 'Chat'
 
 interface Props {
   projectId: string
@@ -294,11 +297,20 @@ function ScenesTab({ videos }: { videos: Video[] }) {
 }
 
 // ---- Main ProjectDetailPage ----
+const VALID_TABS: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes', 'Chat']
+
 export default function ProjectDetailPage({ projectId, onBack }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') as Tab) ?? 'Overview'
+  const initialSkill = searchParams.get('skill')
+  const safeSkill = initialSkill ? initialSkill.replace(/[^a-zA-Z0-9_-]/g, '') : ''
   const [project, setProject] = useState<Project | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
   const [videos, setVideos] = useState<Video[]>([])
-  const [tab, setTab] = useState<Tab>('Overview')
+  const [tab, setTab] = useState<Tab>(VALID_TABS.includes(initialTab) ? initialTab : 'Overview')
+  const [chatInitialInput, setChatInitialInput] = useState<string | null>(
+    safeSkill ? `/${safeSkill} ` : null,
+  )
   const [loading, setLoading] = useState(true)
 
   function fetchAll() {
@@ -317,13 +329,27 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchAll() }, [projectId])
+  useEffect(() => {
+    setLastProjectId(projectId)
+    fetchAll()
+  }, [projectId])
+
+  // Strip ?tab and ?skill from URL after applying so reload doesn't keep prefilling.
+  useEffect(() => {
+    if (searchParams.has('tab') || searchParams.has('skill')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('tab')
+      next.delete('skill')
+      setSearchParams(next, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (loading || !project) {
     return <div className="text-xs" style={{ color: 'var(--muted)' }}>Loading project...</div>
   }
 
-  const tabs: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes']
+  const tabs: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes', 'Chat']
 
   return (
     <div className="flex flex-col gap-4">
@@ -365,6 +391,13 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
         {tab === 'Characters' && <CharactersTab characters={characters} onRefresh={fetchAll} />}
         {tab === 'Videos' && <VideosTab videos={videos} />}
         {tab === 'Scenes' && <ScenesTab videos={videos} />}
+        {tab === 'Chat' && (
+          <ProjectChatPanel
+            projectId={projectId}
+            initialInput={chatInitialInput}
+            onInitialInputConsumed={() => setChatInitialInput(null)}
+          />
+        )}
       </div>
     </div>
   )
