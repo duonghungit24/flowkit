@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from agent.db import crud
 from agent.services import skill_executor
 from agent.services.llm_bridge import stream_chat
-from agent.services.tool_executor import resolve_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +29,6 @@ class ChatRequest(BaseModel):
     project_id: Optional[str] = None
     session_id: Optional[str] = None
     model: Optional[str] = None
-    auto_approve_mutations: bool = False
-
-
-class ConfirmRequest(BaseModel):
-    tool_call_id: str
-    approved: bool
-    session_id: Optional[str] = None  # accepted but unused; kept for client convenience
 
 
 def _derive_title(text: str) -> str:
@@ -78,8 +70,8 @@ async def chat_stream(req: ChatRequest):
     extra_system: Optional[str] = None
     skill_match = skill_executor.detect_skill_command(last.content)
     if skill_match:
-        skill_name, skill_args = skill_match
-        skill_block = skill_executor.execute_skill(skill_name, skill_args)
+        skill_name, _skill_args = skill_match
+        skill_block = skill_executor.execute_skill(skill_name, _skill_args)
         if skill_block:
             extra_system = skill_block
         else:
@@ -88,7 +80,6 @@ async def chat_stream(req: ChatRequest):
     history = [m.model_dump() for m in req.messages]
 
     async def gen():
-        # Buffer assistant final text so we can persist after the stream ends
         final_text_parts: list[str] = []
         try:
             async for line in stream_chat(
@@ -96,7 +87,6 @@ async def chat_stream(req: ChatRequest):
                 session_id=session_id,
                 project_id=req.project_id,
                 extra_system=extra_system,
-                auto_approve_mutations=req.auto_approve_mutations,
             ):
                 yield line
                 try:
@@ -148,17 +138,3 @@ async def delete_session(sid: str) -> dict:
 @router.get("/chat/sessions/{sid}/audit")
 async def list_session_audit(sid: str) -> list[dict]:
     return await crud.list_tool_audit(sid)
-
-
-@router.post("/chat/confirm")
-async def chat_confirm(req: ConfirmRequest) -> dict:
-    """Resolve a pending tool-call confirmation Future. Used by the browser
-    modal to approve or reject mutating tool calls suspended in tool_executor.
-    """
-    ok = resolve_confirmation(req.tool_call_id, req.approved)
-    if not ok:
-        raise HTTPException(
-            status_code=404,
-            detail="tool_call_id not pending (already resolved or timed out)",
-        )
-    return {"ok": True, "tool_call_id": req.tool_call_id, "approved": req.approved}

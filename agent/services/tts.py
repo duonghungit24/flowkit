@@ -17,6 +17,7 @@ PYTHON_BIN = os.environ.get("TTS_PYTHON_BIN", "python3.10")
 # Inline script template for TTS generation via subprocess
 _TTS_SCRIPT = """
 import sys, json, torch, torchaudio
+import numpy as np
 
 args = json.loads(sys.argv[1])
 from omnivoice import OmniVoice
@@ -33,13 +34,19 @@ if args.get("speed") and args["speed"] != 1.0:
     kwargs["speed"] = args["speed"]
 
 audio = model.generate(**kwargs)
-torchaudio.save(args["output"], audio[0], args["sample_rate"])
+wav = audio[0]
+if isinstance(wav, np.ndarray):
+    wav = torch.from_numpy(wav)
+if wav.ndim == 1:
+    wav = wav.unsqueeze(0)
+torchaudio.save(args["output"], wav, args["sample_rate"])
 print(json.dumps({"ok": True, "path": args["output"]}))
 """
 
 # Batch script — loads model once, generates for multiple texts
 _TTS_BATCH_SCRIPT = """
 import sys, json, torch, torchaudio
+import numpy as np
 from pathlib import Path
 
 args = json.loads(sys.argv[1])
@@ -60,8 +67,13 @@ for item in args["items"]:
             kwargs["speed"] = args["speed"]
 
         audio = model.generate(**kwargs)
+        wav = audio[0]
+        if isinstance(wav, np.ndarray):
+            wav = torch.from_numpy(wav)
+        if wav.ndim == 1:
+            wav = wav.unsqueeze(0)
         Path(item["output"]).parent.mkdir(parents=True, exist_ok=True)
-        torchaudio.save(item["output"], audio[0], args["sample_rate"])
+        torchaudio.save(item["output"], wav, args["sample_rate"])
 
         info = torchaudio.info(item["output"])
         duration = info.num_frames / info.sample_rate
@@ -112,7 +124,7 @@ def _run_tts_subprocess(args: dict) -> dict:
     """Run TTS subprocess."""
     proc = subprocess.run(
         [PYTHON_BIN, "-c", _TTS_SCRIPT, json.dumps(args)],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, timeout=300,
     )
     if proc.returncode != 0:
         return {"ok": False, "error": proc.stderr[-500:] if proc.stderr else "unknown error"}
