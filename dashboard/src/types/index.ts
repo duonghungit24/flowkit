@@ -177,6 +177,11 @@ export type NdjsonEvent =
   | { type: 'tool_result'; id: string; content: string; is_error?: boolean }
   | { type: 'error'; content: string }
   | {
+      type: 'session_rebind'
+      session_id: string
+      project_id: string
+    }
+  | {
       type: 'done'
       session_id: string
       final_text?: string

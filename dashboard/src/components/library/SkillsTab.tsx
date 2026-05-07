@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { listSkills } from '../../api/chat-api'
+import { useChatDrawer } from '../../lib/chat-drawer-context'
 import { getLastProjectId } from '../../lib/last-project'
 import { useDebounce } from '../../lib/use-debounce'
 import type { LibrarySkill } from '../../types'
@@ -25,7 +25,7 @@ function matches(skill: LibrarySkill, q: string): boolean {
 }
 
 export default function SkillsTab() {
-  const navigate = useNavigate()
+  const { openWith } = useChatDrawer()
   const [skills, setSkills] = useState<LibrarySkill[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -67,13 +67,10 @@ export default function SkillsTab() {
   }
 
   function handleRunInChat(name: string) {
+    // Open the global drawer pre-bound to the user's last project (or Draft if
+    // none) and pre-fill the input with /<skill-name>.
     const pid = getLastProjectId()
-    if (!pid) {
-      // Toast would be unmounted by navigate before paint — just redirect.
-      navigate('/projects')
-      return
-    }
-    navigate(`/projects/${pid}?tab=Chat&skill=${encodeURIComponent(name)}`)
+    openWith(pid, `/${name} `)
   }
 
   async function handleCopy(cmd: string) {

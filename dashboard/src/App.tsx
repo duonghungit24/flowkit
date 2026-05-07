@@ -6,6 +6,9 @@ import ProjectsPage from './pages/ProjectsPage'
 import LogsPage from './pages/LogsPage'
 import GalleryPage from './pages/GalleryPage'
 import LibraryPage from './pages/LibraryPage'
+import ChatDrawer from './components/chat/ChatDrawer'
+import ChatTriggerButton from './components/chat/ChatTriggerButton'
+import { ChatDrawerProvider } from './lib/chat-drawer-context'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -86,6 +89,10 @@ function Layout() {
           </Routes>
         </main>
       </div>
+
+      {/* Global chat drawer + trigger — mounted outside <Routes> so state survives navigation. */}
+      <ChatTriggerButton />
+      <ChatDrawer />
     </div>
   )
 }
@@ -93,7 +100,9 @@ function Layout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout />
+      <ChatDrawerProvider>
+        <Layout />
+      </ChatDrawerProvider>
     </BrowserRouter>
   )
 }

@@ -78,6 +78,17 @@ export function deleteSession(sid: string): Promise<{ deleted: string }> {
   return fetchAPI(`/api/chat/sessions/${sid}`, { method: 'DELETE' })
 }
 
+// Rebind a session to a different project (or null = draft).
+export function rebindSession(
+  sid: string,
+  projectId: string | null,
+): Promise<ChatSession> {
+  return fetchAPI<ChatSession>(`/api/chat/sessions/${sid}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ project_id: projectId }),
+  })
+}
+
 export interface ToolAuditEntry {
   id: string
   session_id: string

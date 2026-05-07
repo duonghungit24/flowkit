@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { MessageSquare } from 'lucide-react'
 import { fetchAPI, patchAPI } from '../api/client'
 import { setLastProjectId } from '../lib/last-project'
+import { useChatDrawer } from '../lib/chat-drawer-context'
 import type { Project, Character, Video, Scene, ChainType, StatusType } from '../types'
 import EditableText from '../components/projects/EditableText'
-import ProjectChatPanel from '../components/projects/ProjectChatPanel'
 
-type Tab = 'Overview' | 'Characters' | 'Videos' | 'Scenes' | 'Chat'
+type Tab = 'Overview' | 'Characters' | 'Videos' | 'Scenes'
 
 interface Props {
   projectId: string
@@ -297,20 +298,18 @@ function ScenesTab({ videos, refreshNonce }: { videos: Video[]; refreshNonce: nu
 }
 
 // ---- Main ProjectDetailPage ----
-const VALID_TABS: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes', 'Chat']
+const VALID_TABS: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes']
 
 export default function ProjectDetailPage({ projectId, onBack }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = (searchParams.get('tab') as Tab) ?? 'Overview'
   const initialSkill = searchParams.get('skill')
   const safeSkill = initialSkill ? initialSkill.replace(/[^a-zA-Z0-9_-]/g, '') : ''
+  const { openWith, activeProjectId, turnTick } = useChatDrawer()
   const [project, setProject] = useState<Project | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
   const [videos, setVideos] = useState<Video[]>([])
   const [tab, setTab] = useState<Tab>(VALID_TABS.includes(initialTab) ? initialTab : 'Overview')
-  const [chatInitialInput, setChatInitialInput] = useState<string | null>(
-    safeSkill ? `/${safeSkill} ` : null,
-  )
   const [loading, setLoading] = useState(true)
   const [refreshNonce, setRefreshNonce] = useState(0)
 
@@ -336,8 +335,21 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     fetchAll()
   }, [projectId])
 
-  // Strip ?tab and ?skill from URL after applying so reload doesn't keep prefilling.
+  // Refresh when the global chat drawer finishes a turn bound to this project —
+  // skills like /fk-create-* mutate project data the page is showing.
   useEffect(() => {
+    if (turnTick === 0) return
+    if (activeProjectId !== projectId) return
+    fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnTick])
+
+  // Honor ?skill=<name> by opening the drawer pre-bound to this project; strip
+  // ?tab and ?skill afterwards so reload doesn't keep prefilling.
+  useEffect(() => {
+    if (safeSkill) {
+      openWith(projectId, `/${safeSkill} `)
+    }
     if (searchParams.has('tab') || searchParams.has('skill')) {
       const next = new URLSearchParams(searchParams)
       next.delete('tab')
@@ -351,11 +363,11 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     return <div className="text-xs" style={{ color: 'var(--muted)' }}>Loading project...</div>
   }
 
-  const tabs: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes', 'Chat']
+  const tabs: Tab[] = ['Overview', 'Characters', 'Videos', 'Scenes']
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Back + title */}
+      {/* Back + title + chat */}
       <div className="flex items-center gap-3">
         <button
           onClick={onBack}
@@ -365,6 +377,15 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
           Back
         </button>
         <h1 className="font-bold text-sm" style={{ color: 'var(--text)' }}>{project.name}</h1>
+        <button
+          onClick={() => openWith(projectId)}
+          className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded"
+          style={{ background: 'var(--card)', color: 'var(--accent)', border: '1px solid var(--border)' }}
+          title="Open chat for this project (Cmd/Ctrl+Shift+L)"
+        >
+          <MessageSquare size={12} />
+          Chat
+        </button>
       </div>
 
       {/* Tabs */}
@@ -393,15 +414,6 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
         {tab === 'Characters' && <CharactersTab characters={characters} onRefresh={fetchAll} />}
         {tab === 'Videos' && <VideosTab videos={videos} />}
         {tab === 'Scenes' && <ScenesTab videos={videos} refreshNonce={refreshNonce} />}
-        {/* Chat panel stays mounted so in-flight streams + transcript survive tab switches. */}
-        <div style={{ display: tab === 'Chat' ? 'block' : 'none' }}>
-          <ProjectChatPanel
-            projectId={projectId}
-            initialInput={chatInitialInput}
-            onInitialInputConsumed={() => setChatInitialInput(null)}
-            onChatTurnComplete={fetchAll}
-          />
-        </div>
       </div>
     </div>
   )

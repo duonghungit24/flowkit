@@ -1,5 +1,7 @@
 // Single chat message bubble + inline tool-use display.
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ToolCallDisplay } from '../../types'
 
 interface Props {
@@ -8,41 +10,56 @@ interface Props {
   toolCalls?: ToolCallDisplay[]
 }
 
-// Lightweight inline markdown — bold + inline code only.
-function renderInline(text: string): ReactNode[] {
-  const out: ReactNode[] = []
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g
-  let last = 0
-  let m: RegExpExecArray | null
-  let idx = 0
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out.push(text.slice(last, m.index))
-    const tok = m[0]
-    if (tok.startsWith('**')) {
-      out.push(<strong key={`b${idx++}`}>{tok.slice(2, -2)}</strong>)
-    } else {
-      out.push(
-        <code
-          key={`c${idx++}`}
-          className="px-1 rounded"
-          style={{ background: 'var(--surface)', color: 'var(--accent)' }}
-        >
-          {tok.slice(1, -1)}
-        </code>,
-      )
-    }
-    last = m.index + tok.length
-  }
-  if (last < text.length) out.push(text.slice(last))
-  return out
-}
-
-function renderContent(content: string) {
-  return content.split('\n').map((line, i) => (
-    <div key={i} style={{ minHeight: '1em' }}>
-      {renderInline(line)}
+// Markdown rendering — GFM (tables, task-lists, strikethrough) + theme-aware
+// styling via component overrides. Keep links safe (target=_blank, noopener).
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div className="md-body text-xs leading-relaxed break-words">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ node: _n, ...p }) => (
+            <a
+              {...p}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+            />
+          ),
+          code: ({ node: _n, className, children, ...p }) => {
+            const isBlock = /\n/.test(String(children))
+            if (isBlock) {
+              return (
+                <code className={className} {...p}>
+                  {children}
+                </code>
+              )
+            }
+            return (
+              <code
+                className="px-1 rounded"
+                style={{ background: 'var(--surface)', color: 'var(--accent)' }}
+                {...p}
+              >
+                {children}
+              </code>
+            )
+          },
+          pre: ({ node: _n, children, ...p }) => (
+            <pre
+              className="text-xs p-2 rounded overflow-auto whitespace-pre-wrap break-words my-2"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+              {...p}
+            >
+              {children}
+            </pre>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
-  ))
+  )
 }
 
 // One-line summary of a tool_use input — Bash gets command, Read/Edit get file_path,
@@ -135,9 +152,7 @@ export default function ChatMessage({ role, content, toolCalls }: Props) {
           color: 'var(--text)',
         }}
       >
-        {content && (
-          <div className="text-xs leading-relaxed break-words">{renderContent(content)}</div>
-        )}
+        {content && <MarkdownContent text={content} />}
         {toolCalls?.map(tc => <ToolCallCard key={tc.id} tc={tc} />)}
       </div>
     </div>
