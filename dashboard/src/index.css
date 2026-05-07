@@ -27,3 +27,49 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Chat markdown body — keep theme colors, tighten spacing for chat bubble. */
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-body p { margin: 0.25rem 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem;
+  line-height: 1.25;
+  color: var(--text);
+}
+.md-body h1 { font-size: 1.05rem; }
+.md-body h2 { font-size: 1rem; }
+.md-body h3 { font-size: 0.95rem; }
+.md-body h4 { font-size: 0.9rem; }
+.md-body ul, .md-body ol { margin: 0.25rem 0; padding-left: 1.25rem; }
+.md-body li { margin: 0.1rem 0; }
+.md-body li > p { margin: 0; }
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+.md-body blockquote {
+  margin: 0.4rem 0;
+  padding: 0.1rem 0.6rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
+.md-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.5rem 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  margin: 0.4rem 0;
+  width: 100%;
+  font-size: 11px;
+}
+.md-body th, .md-body td {
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.4rem;
+  text-align: left;
+}
+.md-body th { background: var(--surface); font-weight: 600; }
+.md-body strong { font-weight: 700; color: var(--text); }
+.md-body em { font-style: italic; }
+.md-body del { opacity: 0.6; }
