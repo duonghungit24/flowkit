@@ -366,13 +366,32 @@ async def delete_chat_session(sid: str): return await _delete("chat_session", "i
 
 
 async def list_chat_sessions(project_id: str = None) -> list[dict]:
+    # project_id=None means "draft only" (rows with NULL project_id), NOT "all sessions".
+    # Mixing the two leaks project-bound sessions into the draft list after auto-rebind.
     db = await get_db()
     if project_id:
         cur = await db.execute(
             "SELECT * FROM chat_session WHERE project_id=? ORDER BY updated_at DESC", (project_id,))
     else:
-        cur = await db.execute("SELECT * FROM chat_session ORDER BY updated_at DESC")
+        cur = await db.execute(
+            "SELECT * FROM chat_session WHERE project_id IS NULL ORDER BY updated_at DESC")
     return [dict(r) for r in await cur.fetchall()]
+
+
+async def reassign_chat_session_messages(session_id: str, project_id: str) -> int:
+    """Reassign orphan (project_id IS NULL) messages of a session to a project.
+
+    Used after auto-rebind so the user message that triggered the project creation
+    no longer dangles in 'draft'. Returns the number of rows updated.
+    """
+    db = await get_db()
+    async with _db_lock:
+        cur = await db.execute(
+            "UPDATE chat_message SET project_id=? WHERE session_id=? AND project_id IS NULL",
+            (project_id, session_id),
+        )
+        await db.commit()
+    return cur.rowcount or 0
 
 
 async def create_chat_message(session_id: str, role: str, content: str,

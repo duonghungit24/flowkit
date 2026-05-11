@@ -14,7 +14,15 @@ interface ChatDrawerContextValue {
   setOpen: (v: boolean) => void
   toggle: () => void
   activeProjectId: string | null
+  // User-initiated project switch (picker, openWith). Bumps panelResetKey so
+  // the chat panel fully remounts and starts a fresh draft view.
   setActiveProjectId: (pid: string | null) => void
+  // Auto-rebind path: backend created a project mid-stream. Switches scope
+  // WITHOUT bumping panelResetKey so the live transcript + active session id
+  // survive the project change.
+  rebindActiveProjectId: (pid: string) => void
+  // Re-mount key for ChatPanel. Only changes on manual switches.
+  panelResetKey: number
   // Convenience: open drawer pre-bound to a specific project (or draft when null).
   // Optional initialInput pre-fills the chat input (used by SkillsTab "Run in chat").
   openWith: (projectId: string | null, initialInput?: string) => void
@@ -53,6 +61,7 @@ function readActive(): string | null {
 export function ChatDrawerProvider({ children }: { children: ReactNode }) {
   const [open, setOpenState] = useState<boolean>(() => readBool(LS_OPEN))
   const [activeProjectId, setActiveProjectIdState] = useState<string | null>(() => readActive())
+  const [panelResetKey, setPanelResetKey] = useState<number>(0)
   const [projects, setProjects] = useState<Project[]>([])
   const [rebindNotice, setRebindNotice] = useState<{ projectId: string; at: number } | null>(null)
   const [pendingInput, setPendingInput] = useState<string | null>(null)
@@ -87,9 +96,19 @@ export function ChatDrawerProvider({ children }: { children: ReactNode }) {
 
   const setActiveProjectId = useCallback((pid: string | null) => {
     setActiveProjectIdState(pid)
+    setPanelResetKey(k => k + 1)
     try {
       if (pid) localStorage.setItem(LS_ACTIVE_PROJECT, pid)
       else localStorage.removeItem(LS_ACTIVE_PROJECT)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const rebindActiveProjectId = useCallback((pid: string) => {
+    setActiveProjectIdState(pid)
+    try {
+      localStorage.setItem(LS_ACTIVE_PROJECT, pid)
     } catch {
       /* ignore */
     }
@@ -133,6 +152,8 @@ export function ChatDrawerProvider({ children }: { children: ReactNode }) {
       toggle,
       activeProjectId,
       setActiveProjectId,
+      rebindActiveProjectId,
+      panelResetKey,
       openWith,
       pendingInput,
       consumePendingInput,
@@ -149,6 +170,8 @@ export function ChatDrawerProvider({ children }: { children: ReactNode }) {
       toggle,
       activeProjectId,
       setActiveProjectId,
+      rebindActiveProjectId,
+      panelResetKey,
       openWith,
       pendingInput,
       consumePendingInput,

@@ -178,6 +178,16 @@ async def chat_stream(req: ChatRequest):
                                     updated = None
                                 if updated:
                                     rebound_project_id = new_pid
+                                    # Sweep orphan messages so the original user
+                                    # prompt no longer lives in the draft scope.
+                                    try:
+                                        await crud.reassign_chat_session_messages(
+                                            session_id, new_pid
+                                        )
+                                    except Exception as e:
+                                        logger.warning(
+                                            "auto-rebind message reassign failed: %s", e
+                                        )
                                     yield json.dumps(
                                         {
                                             "type": "session_rebind",

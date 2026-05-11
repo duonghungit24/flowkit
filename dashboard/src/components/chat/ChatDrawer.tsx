@@ -13,7 +13,8 @@ export default function ChatDrawer() {
     open,
     setOpen,
     activeProjectId,
-    setActiveProjectId,
+    rebindActiveProjectId,
+    panelResetKey,
     refreshProjects,
     notifyRebind,
     notifyTurnComplete,
@@ -22,7 +23,10 @@ export default function ChatDrawer() {
   } = useChatDrawer()
 
   const handleRebind = (newPid: string) => {
-    setActiveProjectId(newPid)
+    // Auto-rebind: keep the panel mounted so the in-flight stream keeps
+    // rendering. The panel's session hook detects the projectId change and
+    // preserves the active session id (now bound to newPid on the server).
+    rebindActiveProjectId(newPid)
     notifyRebind(newPid)
     refreshProjects().catch(() => {})
   }
@@ -79,7 +83,7 @@ export default function ChatDrawer() {
 
         <div className="flex-1 overflow-hidden p-3">
           <ChatPanel
-            key={activeProjectId ?? 'draft'}
+            key={panelResetKey}
             projectId={activeProjectId}
             height="100%"
             showSessionList={false}

@@ -1,7 +1,7 @@
 // Manages chat session list + active selection + draft-scoped localStorage.
 // localStorage key uses `draft` for project_id=null so draft sessions persist
 // across reload independently from per-project sessions.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteSession, getSession, listSessions } from '../../api/chat-api'
 import type { ChatMessageRecord, ChatSession } from '../../types'
 
@@ -23,6 +23,11 @@ export function useChatSessions(projectId: string | null): UseChatSessions {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeId, setActiveIdState] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Track latest activeId without re-running the project-change effect.
+  const activeIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
 
   const refresh = useCallback(async () => {
     const list = await listSessions(projectId)
@@ -71,12 +76,26 @@ export function useChatSessions(projectId: string | null): UseChatSessions {
   }, [setActiveId])
 
   // Initial load on project change: fetch list + restore last session if it still exists.
+  // Auto-rebind path: when the panel stays mounted and projectId flips from
+  // null → newPid, the session that triggered the rebind is still active in
+  // memory. Carry it over so the transcript doesn't blank out.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         const list = await refresh()
         if (cancelled) return
+        const carry = activeIdRef.current
+        const carriedExists = carry ? list.find(s => s.id === carry) : null
+        if (carriedExists) {
+          try {
+            localStorage.setItem(lsKey(projectId), carriedExists.id)
+          } catch {
+            /* ignore */
+          }
+          // No state change needed — activeId already points at this session.
+          return
+        }
         const remembered = localStorage.getItem(lsKey(projectId))
         const exists = list.find(s => s.id === remembered)
         if (exists) {
