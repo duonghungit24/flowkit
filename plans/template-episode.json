@@ -1,0 +1,81 @@
+{
+  "name": "Template Episode — Replace with Your Title",
+  "story": "Đoạn story tóm tắt 7-10 câu dùng cho narrator, SEO description và thumbnail copy. Mô tả setup (ai/đâu/khi nào), conflict (cái gì kích hoạt sự kiện), stakes (rủi ro là gì), action (escalation chính), climax (đỉnh điểm), resolution (kết quả), và significance (tại sao quan trọng). Viết bằng ngôn ngữ khớp với trường language bên dưới.",
+  "material": "realistic",
+  "language": "vi",
+  "orientation": "HORIZONTAL",
+
+  "characters": [
+    {
+      "name": "The Field Commander",
+      "entity_type": "character",
+      "description": "Mid-40s Mexican Marine officer, athletic build, weathered face, tactical helmet with night-vision mount, dark green operations vest, FX-05 rifle slung across chest. Front-facing reference acceptable since fictional character.",
+      "real_reference": null
+    },
+    {
+      "name": "The Cartel Boss",
+      "entity_type": "character",
+      "description": "Late-50s man, broad shoulders, weathered tan skin, salt-and-pepper buzz cut, thick mustache, black tactical vest over olive shirt. SEEN FROM BEHIND only, full silhouette head to toe. Camera must stay behind or beside in all scenes.",
+      "real_reference": "Nemesio 'El Mencho' Oseguera (replace with real person name if alias-based, else set null)"
+    },
+    {
+      "name": "Tapalpa Mountains",
+      "entity_type": "location",
+      "description": "Pine-forested ridges in Jalisco at dawn, mist rolling through valleys, rocky outcrops, single-track dirt roads winding between trees, scattered ranch buildings in clearings."
+    },
+    {
+      "name": "Black Hawk Helicopter",
+      "entity_type": "visual_asset",
+      "description": "UH-60 in Mexican Marine livery, dark grey with white markings, side door open showing M134 minigun mount, rotors spinning."
+    }
+  ],
+
+  "scenes": [
+    {
+      "display_order": 0,
+      "prompt": "Wide aerial shot of Tapalpa peaks at dawn, mist rolling through valleys, golden sunrise breaking over ridge line.",
+      "video_prompt": "0-3s: Slow push-in over mist-covered ridges. 3-6s: Sun rises behind peaks, golden light spreading. 6-8s: Camera tilts down toward valley floor revealing dirt road. Audio: ambient wind, distant bird calls. SFX: subtle helicopter rotor approaching at 7s. Negative: subtitles, watermark, text overlay, captions.",
+      "character_names": ["Tapalpa Mountains"],
+      "chain_type": "ROOT"
+    },
+    {
+      "display_order": 1,
+      "prompt": "Medium shot of Field Commander studying tactical map in command tent, intense focus, radio operators in background.",
+      "video_prompt": "0-3s: Push-in on Commander's face, eyes scanning map. 3-6s: He taps a coordinate, turns to radio operator. 6-8s: Cuts to map close-up showing ridge with red marker. Audio: muffled radio chatter, paper rustle. SFX: pencil tap on map. Negative: subtitles, watermark, text overlay.",
+      "character_names": ["The Field Commander"],
+      "chain_type": "ROOT"
+    },
+    {
+      "display_order": 2,
+      "prompt": "Low-angle shot of Black Hawk emerging from morning mist over Tapalpa ridge line, rotors kicking up fog.",
+      "video_prompt": "0-3s: Helicopter appears through mist, slow forward motion. 3-6s: Banks right over treeline. 6-8s: Camera tracks as it descends toward LZ. Audio: heavy rotor thump. SFX: wind, distant pine creaking. Negative: subtitles, watermark, text overlay.",
+      "character_names": ["Black Hawk Helicopter", "Tapalpa Mountains"],
+      "chain_type": "ROOT",
+      "transition_prompt": "Helicopter starts wide over mist-covered ridge, descends and banks right, ending closer to treeline with rotor wash visible. Continuation will be from interior cabin perspective."
+    },
+    {
+      "display_order": 3,
+      "prompt": "Door gunner POV from inside Black Hawk cabin, ridge sweeping past at speed, M134 minigun barrel visible in foreground.",
+      "video_prompt": "0-3s: Stable POV looking out side door, terrain blurring past. 3-6s: Gunner traverses minigun left to right, scanning treeline. 6-8s: Helicopter banks, horizon tilts sharply. Audio: rotor thump close, wind rush through open door. SFX: minigun mechanism clicking. Negative: subtitles, watermark, text overlay.",
+      "character_names": ["Black Hawk Helicopter"],
+      "chain_type": "CONTINUATION",
+      "parent_display_order": 2,
+      "transition_prompt": "Camera moves from door gunner POV scanning treeline to a tight shot of Field Commander inside cabin signaling 30-second warning. Maintain interior lighting and motion blur from open door."
+    },
+    {
+      "display_order": 4,
+      "prompt": "Interior cabin shot of Field Commander signaling 30-second warning with raised hand, three fingers extended, team checking gear.",
+      "video_prompt": "0-3s: Commander raises hand, three fingers, mouths '30 seconds'. 3-6s: Team members nod, last-check rifles and harnesses. 6-8s: Commander braces against bulkhead as helicopter pitches forward. Audio: muffled rotor thump, gear clinking. SFX: harness clicks, weapons being chambered. Negative: subtitles, watermark, text overlay.",
+      "character_names": ["The Field Commander", "Black Hawk Helicopter"],
+      "chain_type": "CONTINUATION",
+      "parent_display_order": 3
+    },
+    {
+      "display_order": 5,
+      "prompt": "Behind-view of Cartel Boss standing at ranch window looking out at distant ridge line, full silhouette head to toe, dawn light from window.",
+      "video_prompt": "0-3s: Static behind-view, Cartel Boss silhouetted against window. 3-6s: He slowly raises a coffee cup, posture tensing. 6-8s: He sets cup down sharply, turns slightly toward door but face never visible to camera. Audio: distant rotor thump growing louder. SFX: ceramic cup on wood, footsteps approaching off-screen. Negative: subtitles, watermark, text overlay, character facing camera.",
+      "character_names": ["The Cartel Boss"],
+      "chain_type": "ROOT"
+    }
+  ]
+}
