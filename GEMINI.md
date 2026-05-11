@@ -100,7 +100,7 @@ This project has reusable skills in `skills/`. When the user says `/fk-<name>`, 
 | `/fk-research` | fk-research — Fact-Check & Research Before Scripting |
 | `/fk-review-board` | Start the Scene Review Board web app for visual feedback on scene chains. |
 | `/fk-review-video` | Review AI-generated scene videos for quality using Claude Vision. |
-| `/fk-script` | fk-script — From Topic to Project + Scenes (Auto Scripting) |
+| `/fk-script` | fk-script — From Topic (or Pre-Written Script) to Project + Scenes |
 | `/fk-status` | Show full status dashboard for a project. |
 | `/fk-switch-project` | fk-switch-project — Switch Active Project |
 | `/fk-thumbnail-guide` | YouTube Thumbnail Guide — Hook-Worthy Design Rules |
