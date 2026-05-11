@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Scene } from '../../types'
+import { scenePlayableUrl } from './scene-media'
 
 interface VideoPlayerProps {
   scenes: Scene[]
@@ -22,7 +23,7 @@ export default function VideoPlayer({ scenes, initialIndex, onClose }: VideoPlay
   const [index, setIndex] = useState(initialIndex)
   const scene = scenes[index]
 
-  const videoSrc = scene.vertical_upscale_url || scene.vertical_video_url || ''
+  const videoSrc = scenePlayableUrl(scene)
   const charNames = parseCharacterNames(scene.character_names)
 
   useEffect(() => {

@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react'
 import { fetchAPI } from '../api/client'
 import type { Project, Video, Scene } from '../types'
 import VideoGallery from '../components/gallery/VideoGallery'
+import FinalVideoPanel from '../components/gallery/FinalVideoPanel'
+import { useChatDrawer } from '../lib/chat-drawer-context'
 
 export default function GalleryPage() {
+  const { activeProjectId } = useChatDrawer()
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [videos, setVideos] = useState<Video[]>([])
@@ -15,11 +18,20 @@ export default function GalleryPage() {
     fetchAPI<Project[]>('/api/projects')
       .then(ps => {
         const active = ps.filter(p => p.status !== 'DELETED')
+        // Newest first — backend returns rowid order, which puts oldest first.
+        active.sort((a, b) =>
+          (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''),
+        )
         setProjects(active)
-        if (active.length > 0) setSelectedProject(active[0].id)
+        if (active.length === 0) return
+        // Prefer the chat drawer's active project; fall back to newest.
+        const preferred = activeProjectId && active.find(p => p.id === activeProjectId)
+          ? activeProjectId
+          : active[0].id
+        setSelectedProject(preferred)
       })
       .catch(console.error)
-  }, [])
+  }, [activeProjectId])
 
   useEffect(() => {
     if (!selectedProject) return
@@ -77,6 +89,8 @@ export default function GalleryPage() {
           </div>
         )}
       </div>
+
+      {selectedVideo && <FinalVideoPanel videoId={selectedVideo} />}
 
       {loading ? (
         <div className="text-xs" style={{ color: 'var(--muted)' }}>Loading scenes...</div>

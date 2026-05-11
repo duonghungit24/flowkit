@@ -8,8 +8,9 @@ from contextlib import asynccontextmanager
 import websockets
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT
+from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT, OUTPUT_DIR
 from agent.db.schema import init_db, close_db
 from agent.api.characters import router as characters_router
 from agent.api.projects import router as projects_router
@@ -134,6 +135,12 @@ app.include_router(models_router)
 app.include_router(active_project_router)
 app.include_router(chat_router, prefix="/api")
 app.include_router(skills_router, prefix="/api")
+
+# Serve output directory so the dashboard can play locally-stored MP4s/PNGs.
+# Browsers block file:// from http:// pages, so URLs stored as file://... must
+# be rewritten to /files/<relative-path> on the client.
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/files", StaticFiles(directory=str(OUTPUT_DIR)), name="files")
 
 
 import secrets as _secrets

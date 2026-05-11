@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from agent.models.video import Video, VideoCreate, VideoUpdate
 from agent.sdk.persistence.sqlite_repository import SQLiteRepository
+from agent.utils.paths import project_dir
+from agent.utils.slugify import slugify
 from dataclasses import asdict
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -65,3 +67,48 @@ async def delete(vid: str):
     if not await _repo.delete("video", vid):
         raise HTTPException(404, "Video not found")
     return {"ok": True}
+
+
+@router.get("/{vid}/final")
+async def get_final(vid: str):
+    """Resolve finalized assets for a video.
+
+    Looks under `output/<project_slug>/` for the master MP4, thumbnails,
+    and youtube_metadata.md produced by /fk-concat / /fk-finalize.
+    Returns servable /files paths (via the StaticFiles mount in main.py).
+    """
+    sdk_video = await _repo.get_video(vid)
+    if not sdk_video:
+        raise HTTPException(404, "Video not found")
+    project = await _repo.get("project", sdk_video.project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    slug = slugify(project["name"])
+    pdir = project_dir(slug)
+
+    def _files_url(p):
+        return f"/files/{p.relative_to(pdir.parent).as_posix()}"
+
+    master = pdir / f"{slug}_master.mp4"
+    master_info = None
+    if master.exists():
+        master_info = {"url": _files_url(master), "size": master.stat().st_size}
+
+    thumbs_dir = pdir / "thumbnails"
+    thumbnails = []
+    if thumbs_dir.exists():
+        thumbnails = sorted(_files_url(p) for p in thumbs_dir.glob("*.png"))
+        thumbnails += sorted(_files_url(p) for p in thumbs_dir.glob("*.jpg"))
+
+    metadata = pdir / "youtube_metadata.md"
+    metadata_url = _files_url(metadata) if metadata.exists() else None
+
+    return {
+        "project_slug": slug,
+        "master": master_info,
+        "thumbnails": thumbnails,
+        "youtube_metadata_url": metadata_url,
+        "youtube_id": sdk_video.youtube_id,
+        "stored_url": sdk_video.horizontal_url or sdk_video.vertical_url,
+    }
