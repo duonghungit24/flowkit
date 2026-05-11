@@ -878,7 +878,9 @@ curl -X POST http://127.0.0.1:8100/api/requests \
 
 | Tình huống | Lệnh |
 |---|---|
-| **Full auto (3 lệnh)** | `/fk-script "<topic>" --scenes 40` → `/fk-pipeline --upscale --tts --download --notify` → `/fk-finalize $VID <channel> --schedule "tomorrow 08:00"` |
+| **Full auto từ topic (1 lệnh — `--auto`)** | `/fk-script "<topic>" --scenes 40 --channel <ch> --auto --schedule "tomorrow 08:00"` |
+| **Full auto từ kịch bản viết sẵn (1 lệnh)** | `/fk-script --from-script <file.json> --channel <ch> --auto --schedule "tomorrow 08:00"` |
+| **Full auto (3 lệnh — có review gate)** | `/fk-script "<topic>" --scenes 40` → `/fk-pipeline --upscale --tts --download --notify` → `/fk-finalize $VID <channel> --schedule "tomorrow 08:00"` |
 | Bắt đầu từ 0 (docu) | `/fk-research` → `/fk-create-project` (hoặc `/fk-script`) → `/fk-pipeline --upscale --tts --download --notify` |
 | Bắt đầu từ 0 (fiction) | `/fk-create-project` → `/fk-pipeline --upscale --tts --download --notify` |
 | Post-prod + publish (1 lệnh) | `/fk-finalize $VID <channel>` |
@@ -906,17 +908,73 @@ curl -X POST http://127.0.0.1:8100/api/requests \
 
 ## 13. Auto-From-Topic Workflow — Gần Như Tự Động Từ Ý Tưởng
 
-Với 2 skill mới `/fk-script` + `/fk-finalize`, full pipeline từ topic → uploaded video chỉ còn **3 lệnh** (~10 phút thao tác user, ~90 phút render).
+Với `/fk-script --auto`, full pipeline từ topic → uploaded video chỉ còn **1 lệnh** (~2 phút thao tác user, ~90 phút render nền). Hoặc tách 3 lệnh nếu cần review gate giữa các giai đoạn.
 
 ### Bản Đồ Tự Động Hoá
 
 | Bước | Mức tự động | Skill |
 |---|---|---|
-| Topic → Story → Entities → Scenes | ✅ AUTO + 1 review gate | `/fk-script` |
+| Topic → Story → Entities → Scenes (AI design) | ✅ AUTO + 1 review gate (skip bằng `--yes` hoặc `--auto`) | `/fk-script` (topic mode) |
+| Kịch bản viết sẵn → Validate → POST API | ✅ FULL AUTO (no AI design) | `/fk-script --from-script <file>` |
 | Refs → Images → Videos → Review → Upscale → TTS | ✅ FULL AUTO | `/fk-pipeline` |
 | Narrator + Overlays + Music + Concat + Brand + Thumbnail + SEO + Upload | ✅ FULL AUTO + 1 confirm | `/fk-finalize` |
+| **Chain cả 3 stage trên** | ✅ FULL AUTO khi dùng `/fk-script --auto` | `/fk-script` (chain internal) |
 
-### Workflow Full Auto — 3 Lệnh
+### Workflow Full Auto — 1 Lệnh (`--auto`)
+
+```bash
+/fk-script "Operation Tapalpa CJNG 2026" \
+  --scenes 40 \
+  --orientation H \
+  --language vi \
+  --material realistic \
+  --channel warzone-vn \
+  --auto \
+  --schedule "tomorrow 08:00"
+
+# Khi --auto bật, skill sẽ:
+# 1. Chạy /fk-research nội bộ
+# 2. Design story + entities + scenes (skip review gate vì --auto implies --yes)
+# 3. POST tạo project + video + scenes
+# 4. Tự gọi tiếp /fk-pipeline <PID> <ORI> --upscale --tts --download --notify (block đến khi DONE)
+# 5. Tự gọi tiếp /fk-finalize <VID> warzone-vn --schedule "tomorrow 08:00"
+# 6. In final summary kèm YouTube URL
+#
+# Nếu pipeline hoặc finalize fail giữa chừng → skill abort, in resume command. Không silent retry.
+# Thêm --no-upload nếu muốn dừng sau concat (review video tay trước khi upload).
+```
+
+### Workflow Full Auto — 1 Lệnh (`--from-script`, đã có kịch bản viết sẵn)
+
+Khi đã có file kịch bản đầy đủ (story + characters + scenes), không cần AI design:
+
+```bash
+/fk-script --from-script plans/my-episode-01.json \
+  --channel warzone-vn \
+  --auto \
+  --schedule "tomorrow 08:00"
+
+# Khi --from-script + --auto bật, skill sẽ:
+# 1. Skip Step 2-7 (không research, không AI design)
+# 2. Validate file JSON: schema, references entity↔scene, chain integrity (parent_display_order hợp lệ)
+# 3. POST tạo project + video + scenes (2-pass cho parent_scene_id)
+# 4. Tự gọi tiếp /fk-pipeline ... (block đến khi DONE)
+# 5. Tự gọi tiếp /fk-finalize ...
+# 6. In final summary kèm YouTube URL
+#
+# Validate fail (sai schema, parent_display_order trỏ sai, ...) → abort trước Step 9, không POST gì.
+# Format JSON schema xem skills/fk-script.md hoặc docs/skills-flag-reference.md
+```
+
+**Khi nào dùng `--from-script` thay vì topic mode:**
+- Đã có kịch bản chi tiết tay (40 scene prompts, không muốn AI viết lại)
+- Series có template cố định, mỗi episode chỉ đổi vài scene
+- Migrate project spec từ tool khác (Notion, Google Docs, Excel) sang flowkit
+- Cần reproducibility 100% (chạy lại = ra kết quả giống nhau)
+
+### Workflow Full Auto — 3 Lệnh (Có Review Gate)
+
+Khi muốn review script trước khi đốt credits Flow render:
 
 ```bash
 # 1. Topic → Project + Scenes (auto research + scripting, ~5 phút thao tác)
@@ -927,34 +985,26 @@ Với 2 skill mới `/fk-script` + `/fk-finalize`, full pipeline từ topic → 
   --material realistic \
   --channel warzone-vn
 
-# Skill sẽ:
-# - Chạy /fk-research nội bộ (hoặc reuse với --skip-research)
-# - Auto-detect real-people content → alias EN + back-view rules
-# - Design 7-10 sentence story + 3-7 entities + N scenes với chain structure
-# - In review table → user gõ "yes" / "edit N" / "cancel"
-# - POST tạo project + video + scenes (2-pass cho parent_scene_id)
+# Skill in review table → user gõ "yes" / "edit N" / "cancel"
 
 # 2. Render farm (auto, ~60-90 phút, không cần thao tác)
 /fk-pipeline --upscale --tts --download --notify
 
 # 3. Post-prod + Publish (auto, ~10-15 phút, 1 confirm gate)
 /fk-finalize $VID warzone-vn --schedule "tomorrow 08:00" --with-music
-
-# Skill sẽ:
-# - State detection: skip stage đã COMPLETED (idempotent — re-run sau crash OK)
-# - Chain: narrator → overlays → music → concat-fit-narrator → brand-logo → thumbnails → SEO → upload
-# - In summary trước khi upload → user confirm
-# - Schedule YouTube upload theo --schedule flag
 ```
 
-### Tại Sao Còn 2 Review Gate
+### Tại Sao Vẫn Có Review Gate (Default)
 
-Cố ý — **không auto-gen mù**:
+Cố ý — **không auto-gen mù theo default**:
 
 - **Gate 1 (`/fk-script` review)**: 40 scenes prompt sai = 40 × $X video credit lãng phí. Real-people sai alias → `UNSAFE_GENERATION`. Stop-and-review rẻ hơn discover-broken-after-render.
 - **Gate 2 (`/fk-finalize` upload confirm)**: YouTube upload không thể undo (chỉ delete được). Verify thumbnail + SEO + brand-logo render đúng trước khi public.
 
-Bỏ qua gate bằng `--yes` flag chỉ khi đã chạy template tin tưởng (cùng channel, cùng style, ≥10 lần).
+**Bỏ qua gate bằng:**
+- `--yes` ở `/fk-script` — skip Step 8 review, vẫn dừng sau commit
+- `--auto` ở `/fk-script` — skip Step 8 + chain pipeline + finalize. Dùng khi đã chạy template tin tưởng (cùng channel, cùng style, ≥10 lần).
+- `--no-upload` đi với `--auto` — chain hết nhưng dừng trước upload YouTube
 
 ### Khi Nào Dùng Skill Cũ Thay Thế
 
