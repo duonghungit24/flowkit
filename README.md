@@ -523,6 +523,13 @@ Skills work with any AI CLI that can read files:
 - **UUID enforcement** — extracts UUID from fifeUrl if response doesn't provide it directly
 - **Voice context** — auto-appends character `voice_description` to video prompts
 - **No background music** — auto-appends "no background music, keep sound effects" to all video prompts
+- **Dual video response schema** — Lite/Fast/Ultra models return `operations[]` and stream URLs; Low Priority models (`veo_3_1_*_low_priority`, `*_ultra_relaxed`) return `workflows + media` with the MP4 inline as base64. The SDK auto-detects, validates the `ftyp` magic, and saves the binary to `output/_workflow_videos/{media_id}.mp4`. The scene's `_video_url` is then a `file://` path which `curl` and `ffmpeg` handle natively. `_video_media_id` always stores the real Flow media UUID, so upscale works for both schemas.
+
+### Default Model & Tier Compatibility
+
+The default for `PAYGATE_TIER_TWO` `frame_2_video` and `start_end_frame_2_video` is `veo_3_1_i2v_lite_low_priority` — the TRUE 0-credit Low Priority that works on every service tier including `SERVICE_TIER_ADVANCED`.
+
+The `*_ultra_relaxed` family (Low Priority ultra-quality) silently returns empty operations on `SERVICE_TIER_ADVANCED` accounts because Google requires `SERVICE_TIER_ULTRA` for that path. ULTRA-tier users can switch back via `/fk-change-model` — see `skills/fk-change-model.md` for the full preset list and tier compatibility matrix.
 
 ## Material System
 
@@ -673,6 +680,7 @@ These arrive in the response body as `data.error.details[].reason`. The worker a
 | `Requested entity was not found` | Uploaded `media_id` expired (~1h TTL) | Auto-recover via `_recover_entity_not_found` — re-uploads from `image_url`, re-queues PENDING |
 | `Internal error encountered` | Flow backend transient 500 | Exponential backoff retry: `2^retry * 10s`, capped 300s |
 | `reCAPTCHA failed` / `captcha` | Extension couldn't solve CAPTCHA | Retry up to 10× without incrementing `retry_count` (processor.py:454-464) |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (403, message `reCAPTCHA evaluation failed`) | Google flagged the session as bot-like — usually rapid bursts of submits, VPN/shared IP, or stale auth cookies | NOT auto-recoverable. Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in at `labs.google/fx/tools/flow`, then resubmit with ≥1s gap and ≤5 concurrent. See `/fk-doctor` for full playbook. |
 
 ### HTTP Status Codes
 
@@ -734,6 +742,7 @@ From `youtube/upload.py` (HTTP errors from YouTube Data API v3):
 | Extension shows "No token" | Open `labs.google/fx/tools/flow` and sign in |
 | `CAPTCHA_FAILED: NO_FLOW_TAB` | Open a Google Flow tab |
 | 403 `MODEL_ACCESS_DENIED` | Tier mismatch — check `/api/flow/credits`, downgrade model in `models.json` |
+| 403 `PUBLIC_ERROR_UNUSUAL_ACTIVITY` / `reCAPTCHA evaluation failed` | Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in, then resubmit with ≥1s gap and ≤5 concurrent. Switch network or wait 1–6 h if still blocked |
 | Scene images inconsistent | Check all refs have UUID `media_id` — run `/fk-fix-uuids` |
 | `media_id` starts with `CAMS...` | Run `/fk-fix-uuids` to extract UUID from URL |
 | Upscale "permission denied" | Requires `PAYGATE_TIER_TWO` account |
